@@ -86,7 +86,18 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
-    return Response.json({ entries: await getLeaderboard(), submittedId: submitted.id }, { status: 201 });
+    const { count: higherScores, error: rankError } = await supabase
+      .from("game_scores")
+      .select("id", { count: "exact", head: true })
+      .eq("festival_day", submitted.festival_day)
+      .gt("score", submitted.score);
+
+    if (rankError) throw rankError;
+    return Response.json({
+      entries: await getLeaderboard(),
+      submittedId: submitted.id,
+      submittedRank: (higherScores ?? 0) + 1,
+    }, { status: 201 });
   } catch (error) {
     console.error("Unable to submit score", error);
     return Response.json({ error: "Score could not be saved." }, { status: 503 });

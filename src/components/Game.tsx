@@ -6,7 +6,7 @@ import { ChillIcon, ShieldIcon, SprinkleIcon } from "./GameIcons";
 import { SaveTheScoopLogo } from "./SaveTheScoopLogo";
 import styles from "./Game.module.css";
 
-type Phase = "intro" | "countdown" | "playing" | "paused" | "over";
+type Phase = "intro" | "countdown" | "playing" | "over";
 type PowerType = "chill" | "shield" | "sprinkle";
 
 type LeaderboardEntry = {
@@ -156,15 +156,13 @@ export function Game() {
   const [countdown, setCountdown] = useState("3");
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
-  const [heatLevel, setHeatLevel] = useState(1);
-  const [elapsed, setElapsed] = useState(0);
   const [activePowers, setActivePowers] = useState<Array<{ type: PowerType; remaining: number }>>([]);
-  const [newBest, setNewBest] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [submittedId, setSubmittedId] = useState("");
+  const [submittedRank, setSubmittedRank] = useState(1);
   const [submissionState, setSubmissionState] = useState<"idle" | "saving" | "saved" | "local">("idle");
 
   const changePhase = useCallback((next: Phase) => {
@@ -198,10 +196,7 @@ export function Game() {
     game.trails.length = 0;
     resetPlayer();
     setScore(0);
-    setElapsed(0);
-    setHeatLevel(1);
     setActivePowers([]);
-    setNewBest(false);
   }, [resetPlayer]);
 
   const startGame = useCallback(async () => {
@@ -234,10 +229,11 @@ export function Game() {
           survivalMs,
         }),
       });
-      const result = await response.json() as { entries?: LeaderboardEntry[]; submittedId?: string };
+      const result = await response.json() as { entries?: LeaderboardEntry[]; submittedId?: string; submittedRank?: number };
       if (!response.ok || !result.entries) throw new Error("Score submission failed");
       setLeaderboard(result.entries);
       setSubmittedId(result.submittedId ?? "");
+      setSubmittedRank(result.submittedRank ?? 1);
       setSubmissionState("saved");
     } catch {
       setSubmissionState("local");
@@ -254,7 +250,6 @@ export function Game() {
       window.localStorage.setItem(BEST_SCORE_KEY, String(finalScore));
       setBest(finalScore);
     }
-    setNewBest(beatBest);
     setScore(finalScore);
     setLeaderboard([{
       id: "current-run",
@@ -265,6 +260,7 @@ export function Game() {
       festival_day: "",
     }]);
     setSubmittedId("current-run");
+    setSubmittedRank(1);
     setSubmissionState("saving");
     changePhase("over");
     void submitScore(finalScore, Math.floor(game.elapsed * 1000));
@@ -273,16 +269,6 @@ export function Game() {
   useEffect(() => {
     finishRef.current = finishGame;
   }, [finishGame]);
-
-  const pauseGame = useCallback(() => {
-    if (phaseRef.current === "playing") changePhase("paused");
-  }, [changePhase]);
-
-  const resumeGame = useCallback(() => {
-    if (phaseRef.current !== "paused") return;
-    engineRef.current.lastFrame = performance.now();
-    changePhase("playing");
-  }, [changePhase]);
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(BEST_SCORE_KEY) || 0);
@@ -333,10 +319,7 @@ export function Game() {
       drawGame(context, game, phaseRef.current);
       if (phaseRef.current === "playing" && game.elapsed - game.lastHudUpdate >= 0.1) {
         game.lastHudUpdate = game.elapsed;
-        const difficulty = difficultyAt(game.elapsed);
         setScore(Math.floor(game.score));
-        setElapsed(Math.floor(game.elapsed));
-        setHeatLevel(difficulty.level);
         const powers: Array<{ type: PowerType; remaining: number }> = [];
         if (game.chillUntil > game.elapsed) powers.push({ type: "chill", remaining: Math.ceil(game.chillUntil - game.elapsed) });
         if (game.shieldUntil > game.elapsed) powers.push({ type: "shield", remaining: Math.ceil(game.shieldUntil - game.elapsed) });
@@ -361,16 +344,12 @@ export function Game() {
         event.preventDefault();
         engineRef.current.keys.add(key);
       }
-      if (event.key === "Escape") {
-        if (phaseRef.current === "playing") pauseGame();
-        else if (phaseRef.current === "paused") resumeGame();
-      }
     };
     const onKeyUp = (event: KeyboardEvent) => {
       engineRef.current.keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key);
     };
     const onVisibilityChange = () => {
-      if (document.hidden && phaseRef.current === "playing") pauseGame();
+      if (document.hidden && phaseRef.current === "playing") finishRef.current();
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -380,7 +359,7 @@ export function Game() {
       window.removeEventListener("keyup", onKeyUp);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [pauseGame, resumeGame]);
+  }, []);
 
   const setPointerTarget = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -391,8 +370,7 @@ export function Game() {
     game.player.targetY = clientY - rect.top;
   };
 
-  const playing = phase === "playing" || phase === "paused";
-  const heatProgress = Math.min(100, 12 + (heatLevel - 1) * 8);
+  const playing = phase === "playing";
 
   const handleRegistration = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -436,14 +414,6 @@ export function Game() {
         <SaveTheScoopLogo compact />
         <div className={styles.scoreCard}><span>Device best</span><strong>{formatScore(best)}</strong></div>
       </header>
-
-      <section className={styles.heatCard} aria-label={`Heat level ${heatLevel}`}>
-        <div className={styles.heatLabel}>
-          <span>Heat level {heatLevel}</span>
-          <span>{elapsed}s survived</span>
-        </div>
-        <div className={styles.heatTrack}><div className={styles.heatFill} style={{ width: `${heatProgress}%` }} /></div>
-      </section>
 
       <div className={styles.powerBar} aria-live="polite">
         {activePowers.map((power) => (
@@ -500,14 +470,13 @@ export function Game() {
       </section>
 
       <section className={`${styles.screen} ${styles.gameOver} ${phase === "over" ? styles.visible : ""}`}>
-        <SaveTheScoopLogo compact />
-        <p className={styles.eyebrow}>Game over · {newBest ? "New device best" : `${formatScore(score)} points`}</p>
-        <h1>Today&apos;s leaderboard</h1>
+        <SaveTheScoopLogo />
+        <h1>Game over</h1>
         <div className={styles.finalScore}>
-          <span>{playerName.trim()}</span>
+          <span>Rank #{submittedRank}</span>
           <strong>{formatScore(score)}</strong>
-          <small>{elapsed}s survived</small>
         </div>
+        <h2 className={styles.leaderboardTitle}>Today&apos;s leaderboard</h2>
         <div className={styles.leaderboard} aria-label="Today's leaderboard">
           <div className={styles.leaderboardHead}><span>Rank</span><span>Player</span><span>Score</span></div>
           <ol>
@@ -528,13 +497,6 @@ export function Game() {
         <button className={styles.button} onClick={startGame}>Play again</button>
       </section>
 
-      {phase === "playing" && <button className={styles.pauseButton} aria-label="Pause game" onClick={pauseGame} />}
-      {phase === "paused" && (
-        <section className={styles.paused}>
-          <strong>Paused</strong>
-          <button className={styles.button} onClick={resumeGame}>Resume</button>
-        </section>
-      )}
     </main>
   );
 }
@@ -566,7 +528,7 @@ function updateGame(game: Engine, dt: number, finish: () => void) {
   if (game.keys.has("ArrowDown") || game.keys.has("s")) game.player.targetY += keySpeed * dt;
 
   game.player.targetX = Math.max(game.player.radius, Math.min(game.width - game.player.radius, game.player.targetX));
-  game.player.targetY = Math.max(116, Math.min(game.height - 82, game.player.targetY));
+  game.player.targetY = Math.max(116, Math.min(game.height - 34, game.player.targetY));
   game.player.x += (game.player.targetX - game.player.x) * Math.min(1, dt * 16);
   game.player.y += (game.player.targetY - game.player.y) * Math.min(1, dt * 16);
 
@@ -675,7 +637,7 @@ function burst(game: Engine, x: number, y: number, colors: string[], count: numb
 
 function drawGame(context: CanvasRenderingContext2D, game: Engine, phase: Phase) {
   context.clearRect(0, 0, game.width, game.height);
-  if (!["playing", "paused", "over"].includes(phase)) return;
+  if (!["playing", "over"].includes(phase)) return;
   context.save();
   if (game.elapsed < game.shakeUntil) context.translate(random(-5, 5), random(-5, 5));
   drawTrail(context, game);
@@ -719,55 +681,97 @@ function drawPlayer(context: CanvasRenderingContext2D, game: Engine) {
     context.stroke();
   }
 
-  context.fillStyle = "#ffffff";
+  // Waffle cone
+  context.beginPath();
+  context.moveTo(-19, 7);
+  context.lineTo(19, 7);
+  context.lineTo(0, 52);
+  context.closePath();
+  context.fillStyle = "#f6b92d";
   context.strokeStyle = "#4a1f12";
-  context.lineWidth = 2;
-  roundedRect(context, -22, 9, 44, 42, 8);
+  context.lineWidth = 2.5;
   context.fill();
   context.stroke();
-  context.strokeStyle = "#d5a25a";
-  for (let y = 21; y < 44; y += 10) {
-    context.beginPath(); context.moveTo(-17, y); context.lineTo(17, y); context.stroke();
+  context.save();
+  context.clip();
+  context.strokeStyle = "#c9822d";
+  context.lineWidth = 1.4;
+  for (let offset = -42; offset <= 42; offset += 10) {
+    context.beginPath();
+    context.moveTo(offset - 20, 2);
+    context.lineTo(offset + 20, 56);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(offset + 20, 2);
+    context.lineTo(offset - 20, 56);
+    context.stroke();
   }
+  context.restore();
 
+  // Strawberry scoop with a melting lower edge
+  context.beginPath();
+  context.moveTo(-28, 2);
+  context.bezierCurveTo(-29, -10, -21, -19, -12, -20);
+  context.bezierCurveTo(-8, -31, 7, -35, 14, -23);
+  context.bezierCurveTo(25, -21, 31, -11, 28, 2);
+  context.bezierCurveTo(27, 10, 20, 13, 14, 11);
+  context.bezierCurveTo(10, 10, 10, 19, 4, 18);
+  context.bezierCurveTo(-3, 18, 0, 10, -7, 11);
+  context.bezierCurveTo(-16, 15, -27, 11, -28, 2);
+  context.closePath();
+  context.fillStyle = "#f04f78";
+  context.strokeStyle = "#4a1f12";
+  context.lineWidth = 2.5;
+  context.fill();
+  context.stroke();
+
+  // Vanilla ribbon gives the scoop the same two-flavour treatment as the logo.
+  context.beginPath();
+  context.moveTo(-19, -12);
+  context.bezierCurveTo(-13, -25, 3, -30, 12, -21);
+  context.bezierCurveTo(4, -19, 1, -12, 5, -7);
+  context.bezierCurveTo(-3, -10, -11, -7, -17, -2);
+  context.bezierCurveTo(-21, -4, -22, -8, -19, -12);
+  context.closePath();
   context.fillStyle = "#fff4d9";
   context.strokeStyle = "#4a1f12";
   context.lineWidth = 2;
-  context.beginPath();
-  context.arc(0, 2, 27, Math.PI, 0);
-  context.bezierCurveTo(30, 19, 14, 22, 0, 16);
-  context.bezierCurveTo(-14, 22, -30, 19, -27, 2);
   context.fill();
   context.stroke();
-  context.beginPath(); context.arc(2, -12, 20, Math.PI * 1.02, Math.PI * 2.02); context.fill(); context.stroke();
-  context.beginPath(); context.arc(5, -26, 11, Math.PI * 1.05, Math.PI * 2.1); context.fill(); context.stroke();
-
-  context.fillStyle = "#4a1f12";
-  context.beginPath(); context.arc(-8, 1, 2.6, 0, Math.PI * 2); context.fill();
-  context.beginPath(); context.arc(8, 1, 2.6, 0, Math.PI * 2); context.fill();
-  context.strokeStyle = "#f04f78";
-  context.lineWidth = 2;
-  context.beginPath(); context.arc(0, 4, 7, 0.15, Math.PI - 0.15); context.stroke();
   context.restore();
 }
 
 function drawHazard(context: CanvasRenderingContext2D, hazard: Hazard) {
   context.save();
   context.translate(hazard.x, hazard.y);
-  context.rotate(hazard.rotation);
-  context.fillStyle = "#f6b92d";
   context.strokeStyle = "#4a1f12";
-  context.lineWidth = 2;
+  context.lineWidth = 2.2;
   if (hazard.kind === "drop") {
+    // Upright flame silhouette with a separate inner flame.
     context.beginPath();
-    context.moveTo(0, -hazard.radius * 1.25);
-    context.bezierCurveTo(hazard.radius * 0.28, -hazard.radius * 0.5, hazard.radius, -hazard.radius * 0.2, hazard.radius, hazard.radius * 0.45);
-    context.bezierCurveTo(hazard.radius, hazard.radius, hazard.radius * 0.5, hazard.radius * 1.2, 0, hazard.radius * 1.2);
-    context.bezierCurveTo(-hazard.radius * 0.5, hazard.radius * 1.2, -hazard.radius, hazard.radius, -hazard.radius, hazard.radius * 0.45);
-    context.bezierCurveTo(-hazard.radius, -hazard.radius * 0.15, -hazard.radius * 0.34, -hazard.radius * 0.5, 0, -hazard.radius * 1.25);
+    context.moveTo(0, -hazard.radius * 1.55);
+    context.bezierCurveTo(hazard.radius * 0.12, -hazard.radius, hazard.radius * 0.82, -hazard.radius * 0.72, hazard.radius * 0.55, -hazard.radius * 0.05);
+    context.bezierCurveTo(hazard.radius * 1.02, hazard.radius * 0.18, hazard.radius * 0.94, hazard.radius * 0.82, hazard.radius * 0.42, hazard.radius * 1.1);
+    context.bezierCurveTo(hazard.radius * 0.08, hazard.radius * 1.3, -hazard.radius * 0.5, hazard.radius * 1.18, -hazard.radius * 0.72, hazard.radius * 0.76);
+    context.bezierCurveTo(-hazard.radius * 1.02, hazard.radius * 0.18, -hazard.radius * 0.52, -hazard.radius * 0.08, -hazard.radius * 0.55, -hazard.radius * 0.62);
+    context.bezierCurveTo(-hazard.radius * 0.22, -hazard.radius * 0.42, -hazard.radius * 0.12, -hazard.radius * 0.82, 0, -hazard.radius * 1.55);
+    context.closePath();
+    context.fillStyle = "#f04f78";
+    context.fill();
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(hazard.radius * 0.1, -hazard.radius * 0.62);
+    context.bezierCurveTo(hazard.radius * 0.45, -hazard.radius * 0.18, hazard.radius * 0.55, hazard.radius * 0.38, hazard.radius * 0.25, hazard.radius * 0.72);
+    context.bezierCurveTo(-hazard.radius * 0.04, hazard.radius, -hazard.radius * 0.46, hazard.radius * 0.72, -hazard.radius * 0.4, hazard.radius * 0.3);
+    context.bezierCurveTo(-hazard.radius * 0.34, -hazard.radius * 0.02, -hazard.radius * 0.04, -hazard.radius * 0.2, hazard.radius * 0.1, -hazard.radius * 0.62);
+    context.closePath();
+    context.fillStyle = "#f6b92d";
     context.fill();
     context.stroke();
   } else {
+    context.rotate(hazard.rotation);
+    context.fillStyle = "#f6b92d";
     context.beginPath();
     for (let i = 0; i < 12; i += 1) {
       const angle = (Math.PI * 2 * i) / 12;
@@ -777,6 +781,11 @@ function drawHazard(context: CanvasRenderingContext2D, hazard: Hazard) {
       if (i === 0) context.moveTo(x, y); else context.lineTo(x, y);
     }
     context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.arc(0, 0, hazard.radius * 0.38, 0, Math.PI * 2);
+    context.fillStyle = "#f04f78";
     context.fill();
     context.stroke();
   }
