@@ -558,13 +558,13 @@ function updateGame(game: Engine, dt: number, finish: () => void) {
     if (collides(game.player, hazard, 7)) {
       if (game.shieldUntil > game.elapsed) {
         if (game.shieldHitCooldown <= 0) {
-          burst(game, hazard.x, hazard.y, ["#4a1f12", "#fff4d9", "#f04f78"], 22);
+          burst(game, hazard.x, hazard.y, ["#4a1f12", "#f6b92d", "#f26a21"], 22);
           game.shieldHitCooldown = 0.18;
         }
         game.hazards.splice(i, 1);
         game.score += 12 * multiplier;
       } else {
-        burst(game, hazard.x, hazard.y, ["#f6b92d", "#4a1f12", "#f04f78"], 30);
+        burst(game, hazard.x, hazard.y, ["#f6b92d", "#4a1f12", "#f26a21"], 30);
         game.shakeUntil = game.elapsed + 0.34;
         finish();
         return;
@@ -769,7 +769,7 @@ function drawHazard(context: CanvasRenderingContext2D, hazard: Hazard) {
     context.bezierCurveTo(-hazard.radius * 1.02, hazard.radius * 0.18, -hazard.radius * 0.52, -hazard.radius * 0.08, -hazard.radius * 0.55, -hazard.radius * 0.62);
     context.bezierCurveTo(-hazard.radius * 0.22, -hazard.radius * 0.42, -hazard.radius * 0.12, -hazard.radius * 0.82, 0, -hazard.radius * 1.55);
     context.closePath();
-    context.fillStyle = "#f04f78";
+    context.fillStyle = "#f26a21";
     context.fill();
     context.stroke();
 
@@ -798,9 +798,19 @@ function drawHazard(context: CanvasRenderingContext2D, hazard: Hazard) {
     context.stroke();
     context.beginPath();
     context.arc(0, 0, hazard.radius * 0.38, 0, Math.PI * 2);
-    context.fillStyle = "#f04f78";
+    context.fillStyle = "#f26a21";
     context.fill();
     context.stroke();
+    context.strokeStyle = "#4a1f12";
+    context.lineWidth = 2.2;
+    context.beginPath();
+    context.moveTo(0, -hazard.radius * 0.2);
+    context.lineTo(0, hazard.radius * 0.08);
+    context.stroke();
+    context.beginPath();
+    context.arc(0, hazard.radius * 0.23, 1.7, 0, Math.PI * 2);
+    context.fillStyle = "#4a1f12";
+    context.fill();
   }
   context.restore();
 }
@@ -819,9 +829,36 @@ function drawPowerUp(context: CanvasRenderingContext2D, power: PowerUp, elapsed:
   context.fillStyle = "#4a1f12";
   context.lineWidth = 2.4;
   if (power.type === "chill") {
-    for (let i = 0; i < 3; i += 1) {
-      context.save(); context.rotate((Math.PI * i) / 3); context.beginPath(); context.moveTo(-12, 0); context.lineTo(12, 0); context.stroke(); context.restore();
-    }
+    context.fillStyle = "#fff4d9";
+    context.beginPath();
+    context.moveTo(-16, 9);
+    context.quadraticCurveTo(-10, 3, -2, 5);
+    context.lineTo(7, 7);
+    context.quadraticCurveTo(9, -5, 15, -5);
+    context.quadraticCurveTo(20, -4, 18, 3);
+    context.quadraticCurveTo(15, 11, 3, 11);
+    context.lineTo(-14, 11);
+    context.quadraticCurveTo(-19, 11, -16, 9);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.arc(-4, -1, 9, 0, Math.PI * 2);
+    context.fillStyle = "#f6b92d";
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.arc(-4, -1, 4, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(12, -4); context.lineTo(13, -10);
+    context.moveTo(16, -3); context.lineTo(19, -8);
+    context.stroke();
+    context.beginPath();
+    context.arc(13, -11, 1.2, 0, Math.PI * 2);
+    context.arc(20, -9, 1.2, 0, Math.PI * 2);
+    context.fillStyle = "#4a1f12";
+    context.fill();
   } else if (power.type === "shield") {
     context.beginPath();
     context.moveTo(0, -13); context.lineTo(12, -8); context.lineTo(9, 7); context.quadraticCurveTo(0, 17, -9, 7); context.lineTo(-12, -8); context.closePath(); context.stroke();
