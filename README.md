@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Save the Scoop
 
-## Getting Started
+A standalone, mobile-first festival game built with Next.js, Supabase, and Vercel in mind.
 
-First, run the development server:
+## Current gameplay
+
+- One life: the first unprotected heat collision ends the run.
+- No round timer: players continue until they are hit.
+- Every power-up lasts 10 seconds.
+- Difficulty rises continuously through faster hazards, shorter spawn intervals, drifting movement, and multi-hazard bursts.
+- Custom vector art replaces the original emoji-style ice cream, heat, and power-up icons.
+- The original Save the Scoop wordmark is retained.
+- Players enter a name and phone number before starting.
+- Every completed run opens today’s leaderboard automatically.
+
+## Run locally
+
+Use Node.js 22 or later.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` to `.env.local` and add the Project URL and publishable key from the Supabase Connect dialog. Add the service-role key as `SUPABASE_SERVICE_ROLE_KEY`; it is server-only and must never use a `NEXT_PUBLIC_` prefix.
 
-## Learn More
+Apply the migrations in `supabase/migrations`. The score table has RLS enabled and exposes only public leaderboard columns. Phone numbers remain private. Score writes go through the server route rather than granting insert access to browser clients.
 
-To learn more about Next.js, take a look at the following resources:
+No secret or service-role key belongs in a `NEXT_PUBLIC_` variable.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Import this directory as a Vercel project, set Node.js 22, and add all three Supabase environment variables. Keep the service-role key private. Next.js requires no custom Vercel configuration.
 
-## Deploy on Vercel
+## Not implemented yet
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Single-use QR validation, authoritative server-side score verification, and prize administration remain outside this pass. Until QR validation is connected, the score endpoint should be treated as a prototype trust boundary.

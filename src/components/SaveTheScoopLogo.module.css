@@ -1,0 +1,15 @@
+.logo {
+  width: min(88vw, 350px);
+  line-height: 0;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  mix-blend-mode: multiply;
+}
+
+.compact {
+  width: 74px;
+}
