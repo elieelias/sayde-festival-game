@@ -289,8 +289,8 @@
 
 .gameOver h1 {
   max-width: 330px;
-  margin: -8px 0 12px;
-  font-size: clamp(52px, 15vw, 70px);
+  margin: -10px 0 14px;
+  font-size: clamp(48px, 14vw, 66px);
   font-weight: 950;
   letter-spacing: -0.075em;
   line-height: 0.88;
@@ -298,38 +298,78 @@
 }
 
 .finalScore {
-  min-width: 232px;
-  margin-bottom: 12px;
-  padding: 12px 25px;
-  border: 1px solid #4a1f12;
-  border-radius: 4px;
-  background: #fff;
+  position: relative;
+  width: min(100%, 330px);
+  margin-bottom: 14px;
+  padding: 16px 24px 18px;
+  border: 2px solid #4a1f12;
+  border-radius: 22px;
+  background: #fff4d9;
+  box-shadow: 0 6px 0 #ead8c9;
+  text-align: center;
+}
+
+.finalScore .scoreLabel {
+  color: #7c5b50;
 }
 
 .finalScore strong {
   display: block;
-  margin-top: 3px;
+  margin-top: 1px;
   color: #f04f78;
-  font-size: 44px;
+  font-size: clamp(54px, 16vw, 68px);
+  font-weight: 950;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
   font-variant-numeric: tabular-nums;
+}
+
+.rankBadge {
+  display: block;
+  width: fit-content;
+  margin: 10px auto 0;
+  padding: 7px 9px;
+  border: 1px solid #4a1f12;
+  border-radius: 999px;
+  color: #fff;
+  background: #f04f78;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  text-align: center;
+  text-transform: none;
+}
+
+.rankPending {
+  color: #7c5b50;
+  background: #fff;
+  animation: rankPulse 900ms ease-in-out infinite alternate;
 }
 
 .leaderboardTitle {
   width: min(100%, 330px);
-  margin-bottom: 8px;
+  margin-bottom: 7px;
   color: #4a1f12;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 900;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1;
   white-space: nowrap;
 }
 
+.leaderboardSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
 .leaderboard {
   width: min(100%, 330px);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   border: 1px solid #4a1f12;
-  border-radius: 4px;
+  border-radius: 14px;
   background: #fff;
   overflow: hidden;
   text-align: left;
@@ -358,14 +398,14 @@
 }
 
 .leaderboard ol {
-  max-height: 190px;
+  max-height: 152px;
   overflow-y: auto;
   list-style: none;
 }
 
 .leaderboard li {
-  min-height: 38px;
-  padding: 7px 10px;
+  min-height: 35px;
+  padding: 6px 10px;
   border-top: 1px solid #ead8c9;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -387,20 +427,29 @@
 }
 
 .leaderboard .currentPlayer {
-  background: #fff4d9;
+  box-shadow: inset 5px 0 #f04f78;
+  background: #fff0f4;
 }
 
-.resultCopy {
+.resultError {
   max-width: 320px;
-  min-height: 20px;
-  margin-bottom: 12px;
-  color: #7c5b50;
-  font-size: 13px;
-  line-height: 1.5;
+  margin: -3px 0 10px;
+  color: #b4294e;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.gameOver .button {
+  width: min(100%, 330px);
 }
 
 @keyframes chipIn {
   from { opacity: 0; transform: translateY(-8px) scale(.95); }
+}
+
+@keyframes rankPulse {
+  from { opacity: .55; }
+  to { opacity: 1; }
 }
 
 @media (min-width: 600px) {
@@ -424,5 +473,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .powerChip { animation: none; }
+  .powerChip,
+  .rankPending { animation: none; }
 }

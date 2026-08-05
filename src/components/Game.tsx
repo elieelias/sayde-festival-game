@@ -87,6 +87,7 @@ type Engine = {
 
 const POWER_DURATION = 10;
 const BEST_SCORE_KEY = "save-the-scoop-best";
+const SCORE_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 function createEngine(): Engine {
   return {
@@ -116,7 +117,13 @@ function createEngine(): Engine {
 }
 
 function formatScore(value: number) {
-  return Math.max(0, Math.floor(value)).toString().padStart(4, "0");
+  return SCORE_FORMATTER.format(Math.max(0, Math.floor(value)));
+}
+
+function normalizeGameKey(event: KeyboardEvent) {
+  const key = event.key;
+  if (typeof key !== "string" || key.length === 0) return null;
+  return key.length === 1 ? key.toLowerCase() : key;
 }
 
 function random(min: number, max: number) {
@@ -251,20 +258,13 @@ export function Game() {
       setBest(finalScore);
     }
     setScore(finalScore);
-    setLeaderboard([{
-      id: "current-run",
-      display_name: playerName.trim(),
-      score: finalScore,
-      survival_ms: Math.floor(game.elapsed * 1000),
-      created_at: new Date().toISOString(),
-      festival_day: "",
-    }]);
-    setSubmittedId("current-run");
+    setLeaderboard([]);
+    setSubmittedId("");
     setSubmittedRank(1);
     setSubmissionState("saving");
     changePhase("over");
     void submitScore(finalScore, Math.floor(game.elapsed * 1000));
-  }, [changePhase, playerName, submitScore]);
+  }, [changePhase, submitScore]);
 
   useEffect(() => {
     finishRef.current = finishGame;
@@ -339,14 +339,16 @@ export function Game() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      const key = normalizeGameKey(event);
+      if (!key) return;
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "a", "d", "w", "s"].includes(key)) {
         event.preventDefault();
         engineRef.current.keys.add(key);
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      engineRef.current.keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key);
+      const key = normalizeGameKey(event);
+      if (key) engineRef.current.keys.delete(key);
     };
     const onVisibilityChange = () => {
       if (document.hidden && phaseRef.current === "playing") finishRef.current();
@@ -473,27 +475,38 @@ export function Game() {
         <SaveTheScoopLogo />
         <h1>Game over</h1>
         <div className={styles.finalScore}>
-          <span>Rank #{submittedRank}</span>
+          <span className={styles.scoreLabel}>Your score</span>
           <strong>{formatScore(score)}</strong>
+          <span
+            className={`${styles.rankBadge} ${submissionState === "saving" ? styles.rankPending : ""}`}
+            aria-busy={submissionState === "saving"}
+            aria-live="polite"
+          >
+            {submissionState === "saving" && "Rank: —"}
+            {submissionState === "saved" && `Rank: #${submittedRank}`}
+            {submissionState === "local" && "Rank: unavailable"}
+          </span>
         </div>
-        <h2 className={styles.leaderboardTitle}>Today&apos;s leaderboard</h2>
-        <div className={styles.leaderboard} aria-label="Today's leaderboard">
-          <div className={styles.leaderboardHead}><span>Rank</span><span>Player</span><span>Score</span></div>
-          <ol>
-            {leaderboard.map((entry, index) => (
-              <li className={entry.id === submittedId ? styles.currentPlayer : ""} key={entry.id}>
-                <span>{index + 1}</span>
-                <strong>{entry.display_name}</strong>
-                <b>{formatScore(entry.score)}</b>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <p className={styles.resultCopy} aria-live="polite">
-          {submissionState === "saving" && "Saving your score…"}
-          {submissionState === "saved" && "Your score is on today’s leaderboard."}
-          {submissionState === "local" && "Your result is shown here. Connect Supabase to publish the daily leaderboard."}
-        </p>
+        {submissionState === "saved" && (
+          <div className={styles.leaderboardSection}>
+            <h2 className={styles.leaderboardTitle}>Today&apos;s leaderboard</h2>
+            <div className={styles.leaderboard} aria-label="Today's leaderboard">
+              <div className={styles.leaderboardHead}><span>Rank</span><span>Player</span><span>Score</span></div>
+              <ol>
+                {leaderboard.map((entry, index) => (
+                  <li className={entry.id === submittedId ? styles.currentPlayer : ""} key={entry.id}>
+                    <span>{index + 1}</span>
+                    <strong>{entry.display_name}</strong>
+                    <b>{formatScore(entry.score)}</b>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        )}
+        {submissionState === "local" && (
+          <p className={styles.resultError} role="alert">Leaderboard unavailable. Please try again.</p>
+        )}
         <button className={styles.button} onClick={startGame}>Play again</button>
       </section>
 
