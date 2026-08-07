@@ -1,33 +1,36 @@
 export type Database = {
   public: {
     Tables: {
-      game_scores: {
+      game_entries: {
         Row: {
           id: string;
-          display_name: string;
+          name: string | null;
           phone_number: string | null;
-          score: number;
-          survival_ms: number;
-          festival_day: string;
-          created_at: string;
+          token: string;
+          url: string;
+          is_used: boolean;
+          score: number | null;
+          used_at: string | null;
         };
         Insert: {
           id?: string;
-          display_name: string;
+          name?: string | null;
           phone_number?: string | null;
-          score: number;
-          survival_ms: number;
-          festival_day?: string;
-          created_at?: string;
+          token?: string;
+          url: string;
+          is_used?: boolean;
+          score?: number | null;
+          used_at?: string | null;
         };
         Update: {
           id?: string;
-          display_name?: string;
+          name?: string | null;
           phone_number?: string | null;
-          score?: number;
-          survival_ms?: number;
-          festival_day?: string;
-          created_at?: string;
+          token?: string;
+          url?: string;
+          is_used?: boolean;
+          score?: number | null;
+          used_at?: string | null;
         };
         Relationships: [];
       };

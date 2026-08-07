@@ -2,38 +2,25 @@ import { createServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const LEADERBOARD_COLUMNS = "id,display_name,score,survival_ms,created_at,festival_day" as const;
+const LEADERBOARD_COLUMNS = "id,name,score" as const;
 
 type ScorePayload = {
-  displayName?: unknown;
-  phoneNumber?: unknown;
   score?: unknown;
-  survivalMs?: unknown;
+  token?: unknown;
 };
 
-function festivalDay() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Beirut",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-function normalizePhone(value: string) {
-  const trimmed = value.trim();
-  const prefix = trimmed.startsWith("+") ? "+" : "";
-  return prefix + trimmed.replace(/\D/g, "");
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 async function getLeaderboard() {
   const supabase = createServerClient();
   const { data, error } = await supabase
-    .from("game_scores")
+    .from("game_entries")
     .select(LEADERBOARD_COLUMNS)
-    .eq("festival_day", festivalDay())
+    .not("name", "is", null)
+    .not("score", "is", null)
     .order("score", { ascending: false })
-    .order("created_at", { ascending: true })
     .limit(10);
 
   if (error) throw error;
@@ -57,47 +44,44 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const displayName = typeof payload.displayName === "string" ? payload.displayName.trim() : "";
-  const phoneNumber = typeof payload.phoneNumber === "string" ? normalizePhone(payload.phoneNumber) : "";
+  const token = typeof payload.token === "string" ? payload.token.trim() : "";
   const score = typeof payload.score === "number" ? Math.floor(payload.score) : -1;
-  const survivalMs = typeof payload.survivalMs === "number" ? Math.floor(payload.survivalMs) : -1;
-  const phoneDigits = phoneNumber.replace(/\D/g, "");
 
   if (
-    displayName.length < 1 || displayName.length > 60 ||
-    phoneDigits.length < 7 || phoneDigits.length > 15 ||
-    score < 0 || score > 10_000_000 ||
-    survivalMs < 0 || survivalMs > 86_400_000
+    !isUuid(token) ||
+    score < 0 || score > 10_000_000
   ) {
-    return Response.json({ error: "Invalid player or score details." }, { status: 400 });
+    return Response.json({ error: "Invalid token or score details." }, { status: 400 });
   }
 
   try {
     const supabase = createServerClient();
     const { data: submitted, error } = await supabase
-      .from("game_scores")
-      .insert({
-        display_name: displayName,
-        phone_number: phoneNumber,
-        score,
-        survival_ms: survivalMs,
-      })
+      .from("game_entries")
+      .update({ score })
+      .eq("token", token)
+      .eq("is_used", true)
+      .is("score", null)
       .select(LEADERBOARD_COLUMNS)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    if (!submitted) {
+      return Response.json({ error: "This game token is invalid or already submitted." }, { status: 409 });
+    }
+
     const { count: higherScores, error: rankError } = await supabase
-      .from("game_scores")
+      .from("game_entries")
       .select("id", { count: "exact", head: true })
-      .eq("festival_day", submitted.festival_day)
-      .gt("score", submitted.score);
+      .not("score", "is", null)
+      .gt("score", submitted.score ?? 0);
 
     if (rankError) throw rankError;
     return Response.json({
       entries: await getLeaderboard(),
       submittedId: submitted.id,
       submittedRank: (higherScores ?? 0) + 1,
-    }, { status: 201 });
+    }, { status: 200 });
   } catch (error) {
     console.error("Unable to submit score", error);
     return Response.json({ error: "Score could not be saved." }, { status: 503 });

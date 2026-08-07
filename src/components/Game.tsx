@@ -8,14 +8,12 @@ import styles from "./Game.module.css";
 
 type Phase = "intro" | "countdown" | "playing" | "over";
 type PowerType = "chill" | "shield" | "sprinkle";
+type AccessState = "checking" | "available" | "invalid" | "used" | "error";
 
 type LeaderboardEntry = {
   id: string;
-  display_name: string;
+  name: string;
   score: number;
-  survival_ms: number;
-  created_at: string;
-  festival_day: string;
 };
 
 type Player = {
@@ -158,6 +156,7 @@ export function Game() {
   const phaseRef = useRef<Phase>("intro");
   const finishRef = useRef<() => void>(() => undefined);
   const countdownRunRef = useRef(0);
+  const gameTokenRef = useRef("");
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [countdown, setCountdown] = useState("3");
@@ -167,6 +166,8 @@ export function Game() {
   const [playerName, setPlayerName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [registrationError, setRegistrationError] = useState("");
+  const [accessState, setAccessState] = useState<AccessState>("checking");
+  const [starting, setStarting] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [submittedId, setSubmittedId] = useState("");
   const [submittedRank, setSubmittedRank] = useState(1);
@@ -224,16 +225,14 @@ export function Game() {
     changePhase("playing");
   }, [changePhase, resetGame]);
 
-  const submitScore = useCallback(async (finalScore: number, survivalMs: number) => {
+  const submitScore = useCallback(async (finalScore: number) => {
     try {
       const response = await fetch("/api/scores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          displayName: playerName.trim(),
-          phoneNumber,
           score: finalScore,
-          survivalMs,
+          token: gameTokenRef.current,
         }),
       });
       const result = await response.json() as { entries?: LeaderboardEntry[]; submittedId?: string; submittedRank?: number };
@@ -245,7 +244,7 @@ export function Game() {
     } catch {
       setSubmissionState("local");
     }
-  }, [phoneNumber, playerName]);
+  }, []);
 
   const finishGame = useCallback(() => {
     if (phaseRef.current !== "playing") return;
@@ -263,12 +262,42 @@ export function Game() {
     setSubmittedRank(1);
     setSubmissionState("saving");
     changePhase("over");
-    void submitScore(finalScore, Math.floor(game.elapsed * 1000));
+    void submitScore(finalScore);
   }, [changePhase, submitScore]);
 
   useEffect(() => {
     finishRef.current = finishGame;
   }, [finishGame]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      const token = new URLSearchParams(window.location.search).get("token")?.trim() ?? "";
+      gameTokenRef.current = token;
+      if (!token) {
+        setAccessState("invalid");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/game/access?token=${encodeURIComponent(token)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result = await response.json() as { status?: AccessState };
+        if (result.status === "available" || result.status === "used" || result.status === "invalid") {
+          setAccessState(result.status);
+        } else {
+          setAccessState("error");
+        }
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setAccessState("error");
+      }
+    })();
+
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(BEST_SCORE_KEY) || 0);
@@ -374,7 +403,7 @@ export function Game() {
 
   const playing = phase === "playing";
 
-  const handleRegistration = (event: FormEvent<HTMLFormElement>) => {
+  const handleRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const name = playerName.trim();
     const digits = phoneNumber.replace(/\D/g, "");
@@ -386,8 +415,31 @@ export function Game() {
       setRegistrationError("Enter a valid phone number.");
       return;
     }
+    if (accessState !== "available" || !gameTokenRef.current || starting) return;
+
     setRegistrationError("");
-    void startGame();
+    setStarting(true);
+    try {
+      const response = await fetch("/api/game/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phoneNumber, token: gameTokenRef.current }),
+      });
+      if (!response.ok) {
+        if (response.status === 409) {
+          setAccessState("used");
+          return;
+        }
+        const result = await response.json() as { error?: string };
+        setRegistrationError(result.error ?? "Unable to start the game. Please try again.");
+        return;
+      }
+      await startGame();
+    } catch {
+      setRegistrationError("Unable to start the game. Check your connection and try again.");
+    } finally {
+      setStarting(false);
+    }
   };
 
   return (
@@ -423,7 +475,15 @@ export function Game() {
         ))}
       </div>
 
-      <section className={`${styles.screen} ${phase === "intro" ? styles.visible : ""}`}>
+      <section className={`${styles.screen} ${styles.accessScreen} ${accessState !== "available" ? styles.visible : ""}`}>
+        <SaveTheScoopLogo />
+        {accessState === "checking" && <><h1>Checking your QR code</h1><p>Please wait a moment.</p></>}
+        {accessState === "invalid" && <><h1>QR code required</h1><p>Scan one of the official festival QR codes to access the game.</p></>}
+        {accessState === "used" && <><h1>QR code already used</h1><p>Each QR code allows one game only and cannot be played again.</p></>}
+        {accessState === "error" && <><h1>Unable to verify QR code</h1><p>Check your connection and reload this page.</p></>}
+      </section>
+
+      <section className={`${styles.screen} ${phase === "intro" && accessState === "available" ? styles.visible : ""}`}>
         <SaveTheScoopLogo />
         <p className={styles.intro}>Drag the gelato away from the heat. One hit ends the run, and the game keeps getting harder.</p>
         <div className={styles.powerPreview} aria-label="Ten-second power-ups">
@@ -462,7 +522,9 @@ export function Game() {
             </label>
           </div>
           {registrationError && <p className={styles.formError} role="alert">{registrationError}</p>}
-          <button className={styles.button} type="submit">Start game</button>
+          <button className={styles.button} type="submit" disabled={starting}>
+            {starting ? "Starting…" : "Start game"}
+          </button>
         </form>
       </section>
 
@@ -489,14 +551,14 @@ export function Game() {
         </div>
         {submissionState === "saved" && (
           <div className={styles.leaderboardSection}>
-            <h2 className={styles.leaderboardTitle}>Today&apos;s leaderboard</h2>
-            <div className={styles.leaderboard} aria-label="Today's leaderboard">
+            <h2 className={styles.leaderboardTitle}>Leaderboard</h2>
+            <div className={styles.leaderboard} aria-label="Leaderboard">
               <div className={styles.leaderboardHead}><span>Rank</span><span>Player</span><span>Score</span></div>
               <ol>
                 {leaderboard.map((entry, index) => (
                   <li className={entry.id === submittedId ? styles.currentPlayer : ""} key={entry.id}>
                     <span>{index + 1}</span>
-                    <strong>{entry.display_name}</strong>
+                    <strong>{entry.name}</strong>
                     <b>{formatScore(entry.score)}</b>
                   </li>
                 ))}
@@ -505,9 +567,12 @@ export function Game() {
           </div>
         )}
         {submissionState === "local" && (
-          <p className={styles.resultError} role="alert">Leaderboard unavailable. Please try again.</p>
+          <>
+            <p className={styles.resultError} role="alert">Your score has not been saved yet.</p>
+            <button className={styles.button} onClick={() => void submitScore(score)}>Retry saving score</button>
+          </>
         )}
-        <button className={styles.button} onClick={startGame}>Play again</button>
+        {submissionState !== "local" && <p className={styles.onePlayMessage}>This QR code has now been used.</p>}
       </section>
 
     </main>

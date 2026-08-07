@@ -192,6 +192,31 @@
   background: #d93e67;
 }
 
+.button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
+.accessScreen h1 {
+  margin: 24px 0 8px;
+  font-size: clamp(25px, 8vw, 38px);
+  line-height: 1.02;
+}
+
+.accessScreen p,
+.onePlayMessage {
+  max-width: 320px;
+  color: #7c5b50;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.onePlayMessage {
+  margin-top: 8px;
+  font-weight: 800;
+}
+
 .playerForm {
   width: min(100%, 320px);
   touch-action: auto;
